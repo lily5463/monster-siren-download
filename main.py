@@ -3,6 +3,7 @@ import requests
 from tqdm import tqdm
 import pylrc
 import json
+import argparse
 
 from PIL import Image
 from multiprocessing import Pool, Manager
@@ -208,9 +209,82 @@ def download_album( args):
     return
 
 
+def download_single_song(session, directory, song_query):
+    """Download a single song by name or CID, searching across all albums."""
+    albums = session.get('https://monster-siren.hypergryph.com/api/albums', headers={'Accept': 'application/json'}).json()['data']
+
+    for album in albums:
+        album_cid = album['cid']
+        album_artistes = album['artistes']
+        album_detail = session.get('https://monster-siren.hypergryph.com/api/album/' + album_cid + '/detail', headers={'Accept': 'application/json'}).json()['data']
+        album_name = album_detail['name']
+        album_coverUrl = album_detail['coverUrl']
+
+        for song_track_number, song in enumerate(album_detail['songs']):
+            if song['cid'] == song_query or song['name'].lower() == song_query.lower():
+                song_cid = song['cid']
+                song_name = song['name']
+                song_artists = song['artistes']
+
+                song_detail = session.get('https://monster-siren.hypergryph.com/api/song/' + song_cid, headers={'Accept': 'application/json'}).json()['data']
+                song_lyricUrl = song_detail['lyricUrl']
+                song_sourceUrl = song_detail['sourceUrl']
+
+                album_dir = directory + make_valid(album_name)
+                try:
+                    os.mkdir(directory)
+                except:
+                    pass
+                try:
+                    os.mkdir(album_dir)
+                except:
+                    pass
+
+                # Download album art (same as download_album)
+                with open(album_dir + '/cover.jpg', 'w+b') as f:
+                    f.write(session.get(album_coverUrl).content)
+                cover = Image.open(album_dir + '/cover.jpg')
+                cover.save(album_dir + '/cover.png')
+                os.remove(album_dir + '/cover.jpg')
+
+                # Download lyric
+                if song_lyricUrl is not None:
+                    songlyricpath = album_dir + '/' + make_valid(song_name) + '.lrc'
+                    with open(songlyricpath, 'w+b') as f:
+                        f.write(session.get(song_lyricUrl).content)
+                else:
+                    songlyricpath = None
+
+                # Download song and fill metadata
+                filename, filetype = download_song(session=session, directory=album_dir, name=song_name, url=song_sourceUrl)
+                fill_metadata(filename=filename,
+                              filetype=filetype,
+                              album=album_name,
+                              title=song_name,
+                              albumartist=album_artistes,
+                              artist=song_artists,
+                              tracknumber=song_track_number,
+                              albumcover=album_dir + '/cover.png',
+                              songlyricpath=songlyricpath)
+
+                print(f'Downloaded: {song_name} [{album_name}]')
+                return
+
+    print(f'Song not found: {song_query}')
+
+
 def main():
+    parser = argparse.ArgumentParser(description='Monster Siren downloader')
+    parser.add_argument('--song', metavar='NAME_OR_CID', help='Download a single song by name or CID')
+    args = parser.parse_args()
+
     directory = './MonsterSiren/'
     session = requests.Session()
+
+    if args.song:
+        download_single_song(session, directory, args.song)
+        return
+
     manager = Manager()
     queue = manager.Queue()
     mutex = manager.Lock()

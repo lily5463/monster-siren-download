@@ -21,7 +21,13 @@ ffmpeg
 
 Make sure that you installed ffmpeg and can run `ffmpeg` in your terminal.
 
+Download everything:
 ```python3 main.py``` or ```python main.py```
+
+Download a single song by name or CID:
+```python3 main.py --song "Alive"``` or ```python3 main.py --song 514530```
+
+The song will be saved into its album folder with full metadata, cover art, and lyrics (same as a full download).
 
 ### Video instructions:
 https://drive.google.com/file/d/1Kzcn3GazpE9MHtzlkgJB3L0DtvsHK88M/view?usp=sharing
